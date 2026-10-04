@@ -1,0 +1,27 @@
+{
+  "entities": {
+    "AppState": {
+      "title": "Application State",
+      "description": "Entire contingent state including athletes, coaches, officials, checklists, matches, weigh ins, and settings",
+      "type": "object",
+      "properties": {
+        "athletes": { "type": "array" },
+        "coaches": { "type": "array" },
+        "officials": { "type": "array" },
+        "checklists": { "type": "array" },
+        "weighInLogs": { "type": "array" },
+        "matches": { "type": "array" },
+        "documents": { "type": "array" },
+        "notifications": { "type": "array" },
+        "settings": { "type": "object" },
+        "lastUpdated": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/app/state": {
+      "schema": { "$ref": "#/entities/AppState" },
+      "description": "Main real-time synchronized contingent application state"
+    }
+  }
+}

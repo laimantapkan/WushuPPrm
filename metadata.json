@@ -1,0 +1,6 @@
+{
+  "name": "Wushu Porprov XVI Sumbar – Kontingen Management",
+  "description": "Aplikasi manajemen kontingen Wushu Kab. Padang Pariaman PORPROV XVI SUMBAR untuk pengelolaan atlet Sanda & Taolu, pelatih, official, checklist perlengkapan, penimbangan berat badan, jadwal pertandingan, dan kesiapan keberangkatan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
