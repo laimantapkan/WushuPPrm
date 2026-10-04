@@ -9,12 +9,11 @@ import {
   XCircle,
   FileText,
   Package,
-  User,
   Users,
   Check,
-  AlertCircle,
-  Clock,
-  Filter,
+  Download,
+  FileSpreadsheet,
+  Printer,
 } from 'lucide-react';
 
 interface ChecklistsViewProps {
@@ -114,6 +113,160 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
   const completedEquipItems = equipmentItems.filter((i) => i.isChecked).length;
   const equipPercent = totalEquipItems > 0 ? Math.round((completedEquipItems / totalEquipItems) * 100) : 0;
 
+  // Export to Excel / CSV with UTF-8 BOM
+  const handleExportExcel = () => {
+    const headers = [
+      'No',
+      'Nama Atlet',
+      'Cabang',
+      'Kategori Tanding',
+      'NIK',
+      'No HP',
+      'Surat Pembebasan',
+      'Akta/Ijazah/KTP',
+      'Suket Kesehatan',
+      'Status Kelengkapan',
+    ];
+
+    const rows = athletes.map((a, index) => {
+      const doc = getDocChecklist(a);
+      const isComplete = doc.suratPembebasan && doc.aktaIjazahKtp && doc.suketKesehatan;
+      return [
+        index + 1,
+        `"${a.name.replace(/"/g, '""')}"`,
+        a.discipline,
+        `"${a.matchCategory.replace(/"/g, '""')}"`,
+        `'${a.nik}`,
+        `'${a.phone || '-'}`,
+        doc.suratPembebasan ? 'Lengkap' : 'Belum Lengkap',
+        doc.aktaIjazahKtp ? 'Lengkap' : 'Belum Lengkap',
+        doc.suketKesehatan ? 'Lengkap' : 'Belum Lengkap',
+        isComplete ? 'Lengkap (3/3)' : 'Belum Lengkap',
+      ];
+    });
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Checklist_Dokumen_Atlet_Wushu_Porprov_XVI_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Export / Print PDF
+  const handleExportPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="id">
+      <head>
+        <meta charset="UTF-8">
+        <title>Checklist Dokumen Atlet Kontingen Wushu PORPROV XVI</title>
+        <style>
+          @page { size: A4 landscape; margin: 12mm; }
+          body { font-family: Arial, sans-serif; font-size: 11px; color: #111; margin: 0; padding: 10px; }
+          .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; }
+          .title-main { font-size: 14px; font-weight: bold; text-transform: uppercase; margin: 0; }
+          .title-sub { font-size: 12px; font-weight: bold; margin: 2px 0; }
+          .title-desc { font-size: 10px; color: #444; margin: 0; }
+          .summary { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: bold; font-size: 11px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+          th, td { border: 1px solid #333; padding: 6px 8px; text-align: left; }
+          th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+          .center { text-align: center; }
+          .badge-ok { color: #047857; font-weight: bold; }
+          .badge-no { color: #b91c1c; font-weight: bold; }
+          .footer { margin-top: 25px; display: flex; justify-content: space-between; page-break-inside: avoid; }
+          .sign-box { text-align: center; width: 220px; }
+          .sign-line { margin-top: 55px; border-bottom: 1px solid #000; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <p class="title-main">KONTINGEN WUSHU KABUPATEN PADANG PARIAMAN</p>
+          <p class="title-sub">PORPROV XVI SUMATERA BARAT 2026 - BUKITTINGGI</p>
+          <p class="title-desc">Daftar Verifikasi Kelengkapan 3 Berkas Dokumen Wajib Atlet</p>
+        </div>
+
+        <div class="summary">
+          <div>Total Atlet: ${totalAthletes} Orang</div>
+          <div>Status: ${completeAthletes} dari ${totalAthletes} Atlet Berkas Lengkap (${athleteDocPercent}%)</div>
+          <div>Tanggal Cetak: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 30px;">No</th>
+              <th>Nama Atlet</th>
+              <th style="width: 60px;">Cabang</th>
+              <th>Kategori / Nomor Tanding</th>
+              <th style="width: 120px;">NIK</th>
+              <th style="width: 110px;">Surat Pembebasan</th>
+              <th style="width: 110px;">Akta/Ijazah/KTP</th>
+              <th style="width: 110px;">Suket Kesehatan</th>
+              <th style="width: 90px;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${athletes
+              .map((a, i) => {
+                const doc = getDocChecklist(a);
+                const isComplete = doc.suratPembebasan && doc.aktaIjazahKtp && doc.suketKesehatan;
+                return `
+                <tr>
+                  <td class="center">${i + 1}</td>
+                  <td><strong>${a.name}</strong></td>
+                  <td class="center">${a.discipline}</td>
+                  <td>${a.matchCategory}</td>
+                  <td class="center">${a.nik}</td>
+                  <td class="center ${doc.suratPembebasan ? 'badge-ok' : 'badge-no'}">${doc.suratPembebasan ? '✓ Lengkap' : '✗ Belum'}</td>
+                  <td class="center ${doc.aktaIjazahKtp ? 'badge-ok' : 'badge-no'}">${doc.aktaIjazahKtp ? '✓ Lengkap' : '✗ Belum'}</td>
+                  <td class="center ${doc.suketKesehatan ? 'badge-ok' : 'badge-no'}">${doc.suketKesehatan ? '✓ Lengkap' : '✗ Belum'}</td>
+                  <td class="center ${isComplete ? 'badge-ok' : 'badge-no'}">${isComplete ? 'LENGKAP' : 'BELUM LENGKAP'}</td>
+                </tr>
+              `;
+              })
+              .join('')}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <div class="sign-box">
+            <div>Mengetahui,</div>
+            <div>Sekretaris Kontingen</div>
+            <div class="sign-line">Ibu Ratna Dewi</div>
+          </div>
+          <div class="sign-box">
+            <div>Padang Pariaman, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+            <div>Manajer Kontingen</div>
+            <div class="sign-line">Bpk. Herman Suherman</div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   const handleAddNewSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
@@ -169,14 +322,35 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
             <span>+ Tambah Item Perlengkapan</span>
           </button>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Download Excel Button */}
+            <button
+              onClick={handleExportExcel}
+              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700/30 hover:bg-emerald-700/50 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold transition shadow-sm"
+              title="Download Data Checklist Dokumen Atlet Format Excel (.CSV)"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <span>Download Excel</span>
+            </button>
+
+            {/* Download PDF / Print Button */}
+            <button
+              onClick={handleExportPDF}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-700/30 hover:bg-blue-700/50 text-blue-300 border border-blue-500/40 rounded-xl text-xs font-bold transition shadow-sm"
+              title="Cetak atau Simpan Checklist Dokumen Atlet sebagai PDF"
+            >
+              <Printer className="w-4 h-4 text-blue-400" />
+              <span>Download PDF</span>
+            </button>
+
+            {/* Bulk Mark All Complete Button */}
             {onSetAllAthletesAllDocs && (
               <button
                 onClick={() => onSetAllAthletesAllDocs(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/40 rounded-xl text-xs font-bold transition"
               >
                 <Check className="w-4 h-4" />
-                <span>Tandai Semua Atlet Lengkap (100%)</span>
+                <span>Tandai Semua Lengkap</span>
               </button>
             )}
           </div>
@@ -239,11 +413,11 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
               </div>
             </div>
 
-            {/* 3 Document Pillars Breakdown */}
+            {/* 3 Document Pillars Breakdown (Without numbers) */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <span className="text-[11px] font-bold text-slate-400 block">1. Surat Pembebasan</span>
+                  <span className="text-[11px] font-bold text-slate-400 block">Surat Pembebasan</span>
                   <span className="text-xs text-slate-300 font-medium">Tanggungan Kontingen</span>
                 </div>
                 <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
@@ -253,7 +427,7 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
 
               <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <span className="text-[11px] font-bold text-slate-400 block">2. Akta / Ijazah / KTP</span>
+                  <span className="text-[11px] font-bold text-slate-400 block">Akta / Ijazah / KTP</span>
                   <span className="text-xs text-slate-300 font-medium">Identitas Resmi Atlet</span>
                 </div>
                 <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
@@ -263,7 +437,7 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
 
               <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <span className="text-[11px] font-bold text-slate-400 block">3. Suket Kesehatan</span>
+                  <span className="text-[11px] font-bold text-slate-400 block">Suket Kesehatan</span>
                   <span className="text-xs text-slate-300 font-medium">Surat Dokter / Medis</span>
                 </div>
                 <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
@@ -279,7 +453,7 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Cari nama atlet, NIK, nomor tanding..."
+                placeholder="Cari nama atlet, NIK..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
@@ -358,9 +532,9 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
                         </div>
                       </div>
 
-                      {/* Right: 3 Interactive Document Checkboxes */}
+                      {/* Right: 3 Interactive Document Checkboxes (Without number prefix) */}
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                        {/* 1. Surat Pembebasan */}
+                        {/* Surat Pembebasan */}
                         <button
                           type="button"
                           onClick={() =>
@@ -371,7 +545,7 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
                               !doc.suratPembebasan
                             )
                           }
-                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
                             doc.suratPembebasan
                               ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                               : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
@@ -383,10 +557,10 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
                           ) : (
                             <XCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                           )}
-                          <span>1. Surat Pembebasan</span>
+                          <span>Surat Pembebasan</span>
                         </button>
 
-                        {/* 2. Akta / Ijazah / KTP */}
+                        {/* Akta / Ijazah / KTP */}
                         <button
                           type="button"
                           onClick={() =>
@@ -397,7 +571,7 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
                               !doc.aktaIjazahKtp
                             )
                           }
-                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
                             doc.aktaIjazahKtp
                               ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                               : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
@@ -409,10 +583,10 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
                           ) : (
                             <XCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                           )}
-                          <span>2. Akta/Ijazah/KTP</span>
+                          <span>Akta/Ijazah/KTP</span>
                         </button>
 
-                        {/* 3. Suket Kesehatan */}
+                        {/* Suket Kesehatan */}
                         <button
                           type="button"
                           onClick={() =>
@@ -423,7 +597,7 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
                               !doc.suketKesehatan
                             )
                           }
-                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
                             doc.suketKesehatan
                               ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                               : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
@@ -435,7 +609,7 @@ export const ChecklistsView: React.FC<ChecklistsViewProps> = ({
                           ) : (
                             <XCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                           )}
-                          <span>3. Suket Kesehatan</span>
+                          <span>Suket Kesehatan</span>
                         </button>
 
                         {/* Quick toggle complete button */}
